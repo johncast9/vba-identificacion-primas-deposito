@@ -2,21 +2,22 @@
 
 # Identificación de Primas en Deposito
 
-Macros en VBA para procesar información de primas en depósito, realizar cruces y generar referencias automáticas en Excel.
+Macros en VBA para procesar primas en depósito, realizar cruces y generar referencias automáticas en Excel.
 
 ## Archivos
 
-* Macro principal: procesa y consolida información
-* Funciones de cruce: validan datos entre meses
-* Módulos de referencia: identifican primas a partir de descripciones
+* Módulo principal: consolidación de primas
+* Cruces: validación por monto y fecha
+* Referenciación: identificación basada en texto
 
 ## Uso
 
-1. Configurar rutas en el código:
+1. Configurar rutas:
 
 ```vba
 Const RUTA_ORIGEN = "C:\Ruta\Origen\"
 Const RUTA_DESTINO = "C:\Ruta\Destino\"
+Const RUTA_EC = "C:\Ruta\EstadosCuenta\"
 ```
 
 2. Ejecutar:
@@ -28,10 +29,10 @@ EjecutarProcesoCompleto
 ## Funcionalidad
 
 * Lectura de archivos más recientes
-* Consolidación de primas
-* Cruce de información entre periodos
-* Identificación automática de referencias
-* Procesamiento por reglas de negocio
+* Consolidación de registros
+* Cruce por monto y fecha
+* Generación de referencias automáticas
+* Actualización de estados de cuenta
 
 ## Requisitos
 
@@ -39,6 +40,5 @@ EjecutarProcesoCompleto
 
 ## Notas
 
-* No incluir rutas o datos sensibles
 * Ajustar nombres de columnas según archivo
-* El proceso depende de la estructura del Excel
+* No incluir rutas o datos sensibles
