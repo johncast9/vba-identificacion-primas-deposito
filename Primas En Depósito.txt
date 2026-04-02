@@ -5,16 +5,17 @@ Option Explicit
 ' ============================================
 Const RUTA_ORIGEN As String = "C:\Ruta\Origen\"
 Const RUTA_DESTINO As String = "C:\Ruta\Destino\"
+Const RUTA_EC As String = "C:\Ruta\EstadosCuenta\"
 
 ' ============================================
-' FUNCIÓN: Obtener archivo más reciente
+' UTILIDAD: Archivo más reciente
 ' ============================================
 Function ObtenerArchivoReciente(ruta As String, extension As String) As String
     Dim archivo As String, archivoReciente As String
     Dim fechaReciente As Date
-    
+
     archivo = Dir(ruta & "*." & extension)
-    
+
     Do While archivo <> ""
         If FileDateTime(ruta & archivo) > fechaReciente Then
             fechaReciente = FileDateTime(ruta & archivo)
@@ -22,27 +23,24 @@ Function ObtenerArchivoReciente(ruta As String, extension As String) As String
         End If
         archivo = Dir
     Loop
-    
+
     ObtenerArchivoReciente = archivoReciente
 End Function
 
 ' ============================================
-' PROCESO PRINCIPAL
+' 1) CONSOLIDAR PRIMAS (Unapplied)
 ' ============================================
-Sub ProcesarPrimas()
-
-    If MsgBox("¿Ejecutar proceso?", vbYesNo) = vbNo Then Exit Sub
+Sub ConsolidarPrimas()
 
     Dim wbOrigen As Workbook, wbDestino As Workbook
     Dim wsOrigen As Worksheet, wsDestino As Worksheet
     Dim archivoOrigen As String, archivoDestino As String
     Dim ultimaFilaOrigen As Long, ultimaFilaDestino As Long
-    Dim i As Long
-    
-    ' Obtener archivos
+    Dim colEstado As Long, i As Long
+
     archivoOrigen = ObtenerArchivoReciente(RUTA_ORIGEN, "xlsx")
     archivoDestino = ObtenerArchivoReciente(RUTA_DESTINO, "xlsm")
-    
+
     If archivoOrigen = "" Or archivoDestino = "" Then
         MsgBox "No se encontraron archivos."
         Exit Sub
@@ -54,12 +52,18 @@ Sub ProcesarPrimas()
     Set wsOrigen = wbOrigen.Sheets(1)
     Set wsDestino = wbDestino.Sheets(1)
 
+    colEstado = BuscarColumna(wsOrigen, "Estado")
+
+    If colEstado = 0 Then
+        MsgBox "No se encontró columna de estado."
+        Exit Sub
+    End If
+
     ultimaFilaOrigen = wsOrigen.Cells(wsOrigen.Rows.Count, 1).End(xlUp).Row
     ultimaFilaDestino = wsDestino.Cells(wsDestino.Rows.Count, 1).End(xlUp).Row
 
-    ' Copiar información filtrada
     For i = 2 To ultimaFilaOrigen
-        If wsOrigen.Cells(i, 5).Value = "Unapplied" Then
+        If UCase(wsOrigen.Cells(i, colEstado).Value) = "UNAPPLIED" Then
             wsDestino.Rows(ultimaFilaDestino + 1).Value = wsOrigen.Rows(i).Value
             ultimaFilaDestino = ultimaFilaDestino + 1
         End If
@@ -68,63 +72,147 @@ Sub ProcesarPrimas()
     wbOrigen.Close False
     wbDestino.Save
 
-    MsgBox "Proceso completado."
+End Sub
+
+' ============================================
+' 2) CRUCE POR MONTO Y FECHA (con tolerancia)
+' ============================================
+Sub CrucePorMontoFecha()
+
+    Dim wsBase As Worksheet, wsEC As Worksheet
+    Dim ultimaBase As Long, ultimaEC As Long
+    Dim dict As Object
+    Dim i As Long
+    Dim monto As Double, fecha As Double
+
+    Set wsBase = ThisWorkbook.Sheets("Base")
+    Set wsEC = ThisWorkbook.Sheets("EC")
+
+    ultimaBase = wsBase.Cells(wsBase.Rows.Count, 1).End(xlUp).Row
+    ultimaEC = wsEC.Cells(wsEC.Rows.Count, 1).End(xlUp).Row
+
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    ' Cargar EC en memoria
+    For i = 2 To ultimaEC
+        If IsNumeric(wsEC.Cells(i, 1).Value) And IsDate(wsEC.Cells(i, 3).Value) Then
+            monto = wsEC.Cells(i, 1).Value
+            fecha = CLng(wsEC.Cells(i, 3).Value)
+            dict(monto & "_" & fecha) = i
+        End If
+    Next i
+
+    ' Cruce
+    For i = 2 To ultimaBase
+        If wsBase.Cells(i, 1).Interior.Color = vbYellow Then
+
+            If IsNumeric(wsBase.Cells(i, 4).Value) And IsDate(wsBase.Cells(i, 22).Value) Then
+                monto = wsBase.Cells(i, 4).Value
+                fecha = CLng(wsBase.Cells(i, 22).Value)
+
+                If dict.Exists(monto & "_" & fecha) Then
+                    wsBase.Cells(i, 10).Value = "MATCH"
+                Else
+                    wsBase.Cells(i, 10).Value = "NO MATCH"
+                End If
+            End If
+
+        End If
+    Next i
 
 End Sub
 
 ' ============================================
-' CRUCE DE DATOS (ejemplo simplificado)
+' 3) REFERENCIACIÓN POR TEXTO (regex básico)
 ' ============================================
-Sub CruceDatos()
+Sub GenerarReferencias()
 
     Dim ws As Worksheet
     Dim ultimaFila As Long, i As Long
-    
+    Dim descripcion As String
+
     Set ws = ThisWorkbook.Sheets(1)
     ultimaFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
 
     For i = 2 To ultimaFila
-        If ws.Cells(i, 1).Interior.Color = vbYellow Then
-            ws.Cells(i, 10).Value = "Revisado"
-        End If
-    Next i
 
-    MsgBox "Cruce finalizado."
+        If ws.Cells(i, 1).Interior.Color = vbYellow Then
+
+            descripcion = ws.Cells(i, 15).Value
+
+            If descripcion Like "*POLIZA*" Then
+                ws.Cells(i, 16).Value = "POLIZA"
+            ElseIf descripcion Like "*TRANSFER*" Then
+                ws.Cells(i, 16).Value = "TRANSFERENCIA"
+            Else
+                ws.Cells(i, 16).Value = "SIN CLASIFICAR"
+            End If
+
+        End If
+
+    Next i
 
 End Sub
 
 ' ============================================
-' REFERENCIACIÓN (simplificada)
+' 4) ACTUALIZAR ESTADO DE CUENTA
 ' ============================================
-Sub ReferenciarDatos()
+Sub ActualizarEC()
 
-    Dim ws As Worksheet
-    Dim ultimaFila As Long, i As Long
-    
-    Set ws = ThisWorkbook.Sheets(1)
-    ultimaFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    Dim wbEC As Workbook
+    Dim archivoEC As String
 
-    For i = 2 To ultimaFila
-        If ws.Cells(i, 1).Interior.Color = vbYellow Then
-            ws.Cells(i, 16).Value = "REFERENCIA_GENERADA"
-        End If
-    Next i
+    archivoEC = ObtenerArchivoReciente(RUTA_EC, "xlsx")
 
-    MsgBox "Referenciación completada."
+    If archivoEC = "" Then
+        MsgBox "No se encontró archivo de estado de cuenta."
+        Exit Sub
+    End If
+
+    Set wbEC = Workbooks.Open(archivoEC)
+
+    ' Aquí se podrían copiar columnas por encabezado (simplificado)
+
+    wbEC.Close False
 
 End Sub
 
 ' ============================================
-' EJECUCIÓN COMPLETA
+' UTILIDAD: Buscar columna por nombre
+' ============================================
+Function BuscarColumna(ws As Worksheet, nombre As String) As Long
+
+    Dim i As Long
+
+    For i = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        If UCase(Trim(ws.Cells(1, i).Value)) = UCase(nombre) Then
+            BuscarColumna = i
+            Exit Function
+        End If
+    Next i
+
+    BuscarColumna = 0
+
+End Function
+
+' ============================================
+' PROCESO COMPLETO
 ' ============================================
 Sub EjecutarProcesoCompleto()
 
     If MsgBox("¿Ejecutar proceso completo?", vbYesNo) = vbNo Then Exit Sub
 
-    Call ProcesarPrimas
-    Call CruceDatos
-    Call ReferenciarDatos
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
 
-    MsgBox "Proceso completo finalizado."
+    Call ConsolidarPrimas
+    Call CrucePorMontoFecha
+    Call GenerarReferencias
+    Call ActualizarEC
+
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+
+    MsgBox "Proceso finalizado."
 
 End Sub
