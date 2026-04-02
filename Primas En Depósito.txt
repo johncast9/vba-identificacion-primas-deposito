@@ -1,0 +1,130 @@
+Option Explicit
+
+' ============================================
+' CONFIGURACIÓN
+' ============================================
+Const RUTA_ORIGEN As String = "C:\Ruta\Origen\"
+Const RUTA_DESTINO As String = "C:\Ruta\Destino\"
+
+' ============================================
+' FUNCIÓN: Obtener archivo más reciente
+' ============================================
+Function ObtenerArchivoReciente(ruta As String, extension As String) As String
+    Dim archivo As String, archivoReciente As String
+    Dim fechaReciente As Date
+    
+    archivo = Dir(ruta & "*." & extension)
+    
+    Do While archivo <> ""
+        If FileDateTime(ruta & archivo) > fechaReciente Then
+            fechaReciente = FileDateTime(ruta & archivo)
+            archivoReciente = ruta & archivo
+        End If
+        archivo = Dir
+    Loop
+    
+    ObtenerArchivoReciente = archivoReciente
+End Function
+
+' ============================================
+' PROCESO PRINCIPAL
+' ============================================
+Sub ProcesarPrimas()
+
+    If MsgBox("¿Ejecutar proceso?", vbYesNo) = vbNo Then Exit Sub
+
+    Dim wbOrigen As Workbook, wbDestino As Workbook
+    Dim wsOrigen As Worksheet, wsDestino As Worksheet
+    Dim archivoOrigen As String, archivoDestino As String
+    Dim ultimaFilaOrigen As Long, ultimaFilaDestino As Long
+    Dim i As Long
+    
+    ' Obtener archivos
+    archivoOrigen = ObtenerArchivoReciente(RUTA_ORIGEN, "xlsx")
+    archivoDestino = ObtenerArchivoReciente(RUTA_DESTINO, "xlsm")
+    
+    If archivoOrigen = "" Or archivoDestino = "" Then
+        MsgBox "No se encontraron archivos."
+        Exit Sub
+    End If
+
+    Set wbOrigen = Workbooks.Open(archivoOrigen)
+    Set wbDestino = Workbooks.Open(archivoDestino)
+
+    Set wsOrigen = wbOrigen.Sheets(1)
+    Set wsDestino = wbDestino.Sheets(1)
+
+    ultimaFilaOrigen = wsOrigen.Cells(wsOrigen.Rows.Count, 1).End(xlUp).Row
+    ultimaFilaDestino = wsDestino.Cells(wsDestino.Rows.Count, 1).End(xlUp).Row
+
+    ' Copiar información filtrada
+    For i = 2 To ultimaFilaOrigen
+        If wsOrigen.Cells(i, 5).Value = "Unapplied" Then
+            wsDestino.Rows(ultimaFilaDestino + 1).Value = wsOrigen.Rows(i).Value
+            ultimaFilaDestino = ultimaFilaDestino + 1
+        End If
+    Next i
+
+    wbOrigen.Close False
+    wbDestino.Save
+
+    MsgBox "Proceso completado."
+
+End Sub
+
+' ============================================
+' CRUCE DE DATOS (ejemplo simplificado)
+' ============================================
+Sub CruceDatos()
+
+    Dim ws As Worksheet
+    Dim ultimaFila As Long, i As Long
+    
+    Set ws = ThisWorkbook.Sheets(1)
+    ultimaFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+
+    For i = 2 To ultimaFila
+        If ws.Cells(i, 1).Interior.Color = vbYellow Then
+            ws.Cells(i, 10).Value = "Revisado"
+        End If
+    Next i
+
+    MsgBox "Cruce finalizado."
+
+End Sub
+
+' ============================================
+' REFERENCIACIÓN (simplificada)
+' ============================================
+Sub ReferenciarDatos()
+
+    Dim ws As Worksheet
+    Dim ultimaFila As Long, i As Long
+    
+    Set ws = ThisWorkbook.Sheets(1)
+    ultimaFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+
+    For i = 2 To ultimaFila
+        If ws.Cells(i, 1).Interior.Color = vbYellow Then
+            ws.Cells(i, 16).Value = "REFERENCIA_GENERADA"
+        End If
+    Next i
+
+    MsgBox "Referenciación completada."
+
+End Sub
+
+' ============================================
+' EJECUCIÓN COMPLETA
+' ============================================
+Sub EjecutarProcesoCompleto()
+
+    If MsgBox("¿Ejecutar proceso completo?", vbYesNo) = vbNo Then Exit Sub
+
+    Call ProcesarPrimas
+    Call CruceDatos
+    Call ReferenciarDatos
+
+    MsgBox "Proceso completo finalizado."
+
+End Sub
